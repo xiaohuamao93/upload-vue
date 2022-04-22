@@ -1,6 +1,6 @@
 <template>
   <div>
-    文件上传1
+    文件上传-切片
     <input
       class="not-show"
       ref="upload"
@@ -14,7 +14,8 @@
         <span>上传文件</span>
       </li>
       <li class="img-item" v-for="(file, index) in uploadMats" :key="index">
-        <img class="img" :src="file.url" />
+        <img v-if="isImg(file.type)" class="img" :src="file.url" />
+        <video class="video" v-else :src="file.url" />
         <div class="progress-wrap">
           <el-progress
             :text-inside="true"
@@ -30,13 +31,14 @@
 
 <script>
 export default {
-  name: "Upload_1",
+  name: "Upload_3",
   props: {},
   data() {
     return {
       uploadMats: [],
-      progress: 10,
-      size: 1024 * 50,
+      // progress: 10,
+      size: 1024 * 500,
+      fileChunks: [],
     };
   },
   created() {},
@@ -55,6 +57,7 @@ export default {
       };
       matsArr.push(fileWrap);
       this.uploadMats = this.uploadMats.concat(matsArr);
+      this.fileInfo = fileWrap;
       this.uploadFile(fileWrap);
     },
 
@@ -62,27 +65,42 @@ export default {
       this.$refs.upload.click();
     },
 
+    isImg(type) {
+      const imgType = ["png", "jpg"];
+      return imgType.includes(type);
+    },
+
     getUrl(file) {
-      return URL.createObjectURL(file);
+      var url = null;
+      if (window.createObjectURL != undefined) {
+        // basic
+        url = window.createObjectURL(file);
+      } else if (window.URL != undefined) {
+        // mozilla(firefox)
+        url = window.URL.createObjectURL(file);
+      } else if (window.webkitURL != undefined) {
+        // webkit or chrome
+        url = window.webkitURL.createObjectURL(file);
+      }
+      return url;
     },
     uploadFile(fileInfo) {
-      console.log("------");
       let fileChunks = [];
       let index = 0; //切片序号
-      let [fname, fext] = fileInfo.name.split(".");
+      let [fname, type] = fileInfo.name.split(".");
       for (let cur = 0; cur < fileInfo.size; cur += this.size) {
         let blob = fileInfo.file.slice(cur, cur + this.size);
-        let blobName = `${fname}.${index}.${fext}`;
+        let blobName = `${fname}.${index}.${type}`;
         let blobFile = new File([blob], blobName);
         fileChunks.push({
+          uploadSize: 0,
           hash: index++,
           chunk: blobFile,
         });
       }
-      console.log("----fileChunks", fileChunks);
 
-      const url = this.$host + "/upload/file3";
-      const merUrl = this.$host + "/upload/merge";
+      this.fileChunks = fileChunks;
+      const url = this.$host + "/uploadslice/file";
 
       this.$async.each(
         fileChunks,
@@ -91,29 +109,24 @@ export default {
           param.append("filename", fileInfo.name);
           param.append("hash", chunkInfo.hash);
           param.append("file", chunkInfo.chunk);
-          // param.append(
-          //   "file",
-          //   chunkInfo.chunk,
-          //   `${fileInfo.name}-${chunkInfo.hash}`
-          // );
 
-          let progress = 0;
+          // let progress = 0;
           let config = {
             headers: {
               "Content-Type": "multipart/form-data",
             },
-            onUploadProgress(progressEvent) {
-              if (progressEvent.lengthComputable) {
-                progress = (
-                  (progressEvent.loaded / progressEvent.total) *
-                  100
-                ).toFixed(0);
-                console.log("----progress", progress);
-                // self.uploadMats[index].progress = parseInt(progress);
-                //  currentMat.progress = parseInt(progress);
-                // self.$set(self.uploadMats, index, currentMat);
-              }
-            },
+            // onUploadProgress(progressEvent) {
+            //   if (progressEvent.lengthComputable) {
+            //     // progress = (
+            //     //   (progressEvent.loaded / progressEvent.total) *
+            //     //   100
+            //     // ).toFixed(0);
+            //     // console.log("----progress", progress);
+            //     // self.fileChunks[index].progress = parseInt(progress);
+            //     //  currentMat.progress = parseInt(progress);
+            //     // self.$set(self.uploadMats, index, currentMat);
+            //   }
+            // },
           };
           this.axios
             .post(url, param, config)
@@ -121,38 +134,45 @@ export default {
               console.log("--res", res);
               let result = res.data;
               if (result && result.code === 0) {
-                // this.uploadMats[index].isUpload = true;
                 callback();
               } else {
                 callback("err");
               }
-              // if (loadingMasks[index]) loadingMasks[index].close();
             })
             .catch((err) => {
-              // if (loadingMasks[index]) loadingMasks[index].close();
               callback(err);
             });
         },
-        (err, res) => {
-          if (err) {
-            console.log("err", err);
-          } else {
-            console.log("All files have been deleted successfully", res);
-            this.axios
-              .get(merUrl, {
-                params: {
-                  fileName: fileInfo.name,
-                },
-              })
-              .then((res) => {
-                console.log("---a-aaa success", res);
-              })
-              .catch((err) => {
-                console.log("-----errr erro", err);
-              });
-          }
+        (err) => {
+          if (err) return this.$message.error("切片上传失败");
+          this.mergePost(fileInfo.name);
         }
       );
+    },
+    mergePost(fileName) {
+      const merUrl = this.$host + "/uploadslice/merge";
+      this.axios
+        .get(merUrl, {
+          params: {
+            fileName: fileName,
+          },
+        })
+        .then(() => {
+          this.$message.success("文件上传成功");
+        })
+        .catch(() => {
+          this.$message.error("文件上传失败");
+        });
+    },
+  },
+  computed: {
+    progress: function () {
+      const mat = this.uploadMats.find((file) => !file.isUpload);
+      if (!mat) return 0;
+      this.fileChunks.reduce((total, chunkInfo) => {
+        return total + chunkInfo.uploadSize;
+      }, 0);
+      return "";
     },
   },
 };
@@ -187,6 +207,9 @@ ul {
 .img {
   width: 100%;
   height: 100%;
+}
+.video {
+  width: 100%;
 }
 .progress-wrap {
   position: absolute;

@@ -4,7 +4,6 @@
       <el-tab-pane label="文件上传" name="first"><Upload1 /> </el-tab-pane>
       <el-tab-pane label="文件上传-2" name="second"><Upload2 /> </el-tab-pane>
       <el-tab-pane label="文件上传-切片" name="third"><Upload3 /></el-tab-pane>
-      <el-tab-pane label="定时任务补偿" name="fourth">定时任务补偿</el-tab-pane>
     </el-tabs>
   </div>
 </template>

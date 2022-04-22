@@ -1,7 +1,5 @@
 <template>
   <div>
-    文件上传1
-
     <input
       class="not-show"
       ref="upload"
@@ -68,7 +66,7 @@ export default {
       const self = this;
       const index = this.uploadMats.length - 1;
       const currentMat = this.uploadMats[index];
-      const url = this.$host + "/upload/file";
+
       let { file } = fileWrap;
       let param = new FormData();
       param.append("file", file, file.name);
@@ -88,7 +86,7 @@ export default {
           }
         },
       };
-
+      const url = this.$host + "/upload/file";
       this.axios
         .post(url, param, config)
         .then(() => {
